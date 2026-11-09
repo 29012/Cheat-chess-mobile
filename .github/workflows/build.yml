@@ -34,13 +34,12 @@ jobs:
       - name: Fix JVM target
         run: |
           cd "$PROJECT_DIR"
-          for f in app/build.gradle app/build.gradle.kts; do
-            [ -f "$f" ] || continue
-            sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' "$f"
-            sed -i "s/jvmTarget = ['\"]1.8['\"]/jvmTarget = '17'/g" "$f"
-            sed -i 's/JvmTarget.JVM_1_8/JvmTarget.JVM_17/g' "$f"
-            grep -n -i "jvmTarget\|JavaVersion" "$f" || true
+          find . -name "*.gradle" -o -name "*.gradle.kts" | while read f; do
+            sed -i -E 's/VERSION_1_8/VERSION_17/g; s/JVM_1_8/JVM_17/g; s/"1\.8"/"17"/g; s/'"'"'1\.8'"'"'/'"'"'17'"'"'/g' "$f"
           done
+          echo "" >> gradle.properties
+          echo "kotlin.jvm.target.validation.mode=warning" >> gradle.properties
+          grep -rn -i "jvmTarget\|JavaVersion\|sourceCompat\|targetCompat" --include=*.gradle --include=*.kts . || true
 
       - uses: gradle/actions/setup-gradle@v4
         with:
