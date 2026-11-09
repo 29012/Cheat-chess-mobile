@@ -3,7 +3,8 @@ name: Build ChessCoach APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -14,20 +15,35 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
       - name: Extract project
         run: |
+          mkdir unpacked
           unzip -q ChessCoach_Android_Source.zip -d unpacked
-          PROJECT_DIR=$(find unpacked -name settings.gradle -o -name settings.gradle.kts | head -1 | xargs dirname)
+          echo "Содержимое архива:"
+          find unpacked -maxdepth 4 -type f | head -100
+
+      - name: Find Gradle project
+        run: |
+          PROJECT_FILE=$(find unpacked -name settings.gradle -o -name settings.gradle.kts | head -1)
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "ОШИБКА: settings.gradle не найден"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PROJECT_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-          echo "Project: $PROJECT_DIR"
+          echo "Найден проект: $PROJECT_DIR"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -37,8 +53,9 @@ jobs:
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
+
+          if [ -f gradlew ]; then
+            chmod +x gradlew
             ./gradlew :app:assembleDebug
           else
             gradle :app:assembleDebug
@@ -49,3 +66,4 @@ jobs:
         with:
           name: ChessCoach-APK
           path: unpacked/**/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
