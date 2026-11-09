@@ -22,16 +22,25 @@ jobs:
 
       - name: Extract project
         run: |
-          ls -la
           mkdir unpacked
           unzip -q ChessCoach_Android_Source.zip -d unpacked
-          find unpacked -maxdepth 3
 
       - name: Find Gradle project
         run: |
           PROJECT_FILE=$(find unpacked \( -name settings.gradle -o -name settings.gradle.kts \) | head -1)
           [ -z "$PROJECT_FILE" ] && { echo "Gradle project not found"; exit 1; }
           echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> $GITHUB_ENV
+
+      - name: Fix JVM target
+        run: |
+          cd "$PROJECT_DIR"
+          for f in app/build.gradle app/build.gradle.kts; do
+            [ -f "$f" ] || continue
+            sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' "$f"
+            sed -i "s/jvmTarget = ['\"]1.8['\"]/jvmTarget = '17'/g" "$f"
+            sed -i 's/JvmTarget.JVM_1_8/JvmTarget.JVM_17/g' "$f"
+            grep -n -i "jvmTarget\|JavaVersion" "$f" || true
+          done
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -47,8 +56,9 @@ jobs:
             gradle :app:assembleDebug --stacktrace
           fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: ChessCoach-APK
-          path: unpacked/**/build/outputs/apk/debug/*.apk
+          path: unpacked/**/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
