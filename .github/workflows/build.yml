@@ -1,63 +1,54 @@
 name: Build ChessCoach APK
 
 on:
-workflow_dispatch:
-push:
-branches:
-- main
+  workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-  - name: Setup Java
-    uses: actions/setup-java@v5
-    with:
-      distribution: temurin
-      java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
-  - name: Setup Android SDK
-    uses: android-actions/setup-android@v4
-    with:
-      packages: 'platform-tools'
+      - name: Extract project
+        run: |
+          ls -la
+          mkdir unpacked
+          unzip -q ChessCoach_Android_Source.zip -d unpacked
+          find unpacked -maxdepth 3
 
-  - name: Extract project
-    run: |
-      mkdir unpacked
-      unzip -q ChessCoach_Android_Source.zip -d unpacked
+      - name: Find Gradle project
+        run: |
+          PROJECT_FILE=$(find unpacked \( -name settings.gradle -o -name settings.gradle.kts \) | head -1)
+          [ -z "$PROJECT_FILE" ] && { echo "Gradle project not found"; exit 1; }
+          echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> $GITHUB_ENV
 
-  - name: Find Gradle project
-    run: |
-      PROJECT_FILE=$(find unpacked -name settings.gradle -o -name settings.gradle.kts | head -1)
-      if [ -z "$PROJECT_FILE" ]; then
-        echo "Gradle project not found"
-        exit 1
-      fi
-      PROJECT_DIR=$(dirname "$PROJECT_FILE")
-      echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
-  - name: Setup Gradle
-    uses: gradle/actions/setup-gradle@v4
-    with:
-      gradle-version: '8.9'
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew :app:assembleDebug --stacktrace
+          else
+            gradle :app:assembleDebug --stacktrace
+          fi
 
-  - name: Build APK
-    run: |
-      cd "$PROJECT_DIR"
-      if [ -f gradlew ]; then
-        chmod +x gradlew
-        ./gradlew :app:assembleDebug
-      else
-        gradle :app:assembleDebug
-      fi
-
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: ChessCoach-APK
-      path: unpacked/**/app/build/outputs/apk/debug/*.apk
-      if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChessCoach-APK
+          path: unpacked/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
